@@ -1,20 +1,18 @@
 import os
-import sys
 import json
 import time
 import socket
 import threading
-from flask import Flask, render_template
-from flask_socketio import SocketIO
+from flask import Flask, render_template, request, Response
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+THIS_COMPUTER_HOST = os.environ.get("THIS_COMPUTER_HOST")
+PORT = int(os.environ.get("PORT"))
+PROCESS_ID = os.environ.get("PROCESS_ID")
+WEB_PORT = int(os.environ.get("WEB_PORT"))
 
 OTHER_COMPUTER_HOST = os.environ.get("OTHER_COMPUTER_HOST")
-THIS_COMPUTER_HOST = "0.0.0.0"
-PROCESS_ID = os.environ.get("PROCESS_ID")
-PORT = int(os.environ.get("PORT"))
-WEB_PORT = int(os.environ.get("WEB_PORT"))
 
 MOCK_PEERS = {
     "P1": {"ip": THIS_COMPUTER_HOST, "port": 5001},
@@ -29,78 +27,87 @@ MOCK_PEERS = {
 lamport_clock = 0
 clock_lock = threading.Lock()
 logs = []
+listeners = []
 
-def log_and_notify(action, detail):
-    global lamport_clock
-    log_entry = {
-        "clock": lamport_clock,
-        "action": action,
-        "detail": detail,
-        "time": time.strftime("%H:%M:%S")
-    }
-    logs.append(log_entry)
-    socketio.emit('update', {'clock': lamport_clock, 'logs': logs})
+def notify_browsers():
+    global lamport_clock, logs
+    data = json.dumps({"clock": lamport_clock, "logs": logs})
+    for listener in listeners:
+        listener.put(data)
 
 def tcp_server():
     global lamport_clock
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((THIS_COMPUTER_HOST, PORT))
+    server.bind(("0.0.0.0", PORT))
     server.listen(5)
-    print(f"[{PROCESS_ID}] Servidor TCP escutando na porta {PORT}...")
     
     while True:
         conn, addr = server.accept()
         data = conn.recv(1024).decode('utf-8')
         if data:
             payload = json.loads(data)
-            sender = payload["sender"]
-            msg_text = payload["text"]
-            received_clock = payload["clock"]
-            
             with clock_lock:
-                lamport_clock = max(lamport_clock, received_clock) + 1
-                log_and_notify("RECEBIDO", f"De {sender}: '{msg_text}' (Relógio recebido: {received_clock})")
+                lamport_clock = max(lamport_clock, payload["clock"]) + 1
+                logs.append({
+                    "time": time.strftime("%H:%M:%S"),
+                    "clock": lamport_clock,
+                    "action": "RECEBIDO",
+                    "detail": f"De {payload['sender']}: '{payload['text']}'"
+                })
+                notify_browsers()
         conn.close()
 
-@socketio.on('send_message')
-def handle_send_message(data):
+@app.route('/')
+def index():
+    destinations = [k for k in MOCK_PEERS.keys() if k != PROCESS_ID]
+    return render_template('index.html', pid=PROCESS_ID, destinations=destinations)
+
+@app.route('/send', methods=['POST'])
+def send_message():
     global lamport_clock
-    target_id = data['target']
-    msg_text = data['text']
-    
-    if target_id not in MOCK_PEERS or target_id == PROCESS_ID:
-        return
+    req = request.json
+    target_id = req['target']
+    msg_text = req['text']
     
     with clock_lock:
         lamport_clock += 1
         current_clock = lamport_clock
-        log_and_notify("ENVIADO", f"Para {target_id}: '{msg_text}'")
+        logs.append({
+            "time": time.strftime("%H:%M:%S"),
+            "clock": current_clock,
+            "action": "ENVIADO",
+            "detail": f"Para {target_id}: '{msg_text}'"
+        })
+        notify_browsers()
 
     def send_task():
         try:
             peer = MOCK_PEERS[target_id]
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(3.0)
+            s.settimeout(2.0)
             s.connect((peer["ip"], peer["port"]))
-            
-            payload = {
-                "sender": PROCESS_ID,
-                "clock": current_clock,
-                "text": msg_text
-            }
-            s.sendall(json.dumps(payload).encode('utf-8'))
+            s.sendall(json.dumps({"sender": PROCESS_ID, "clock": current_clock, "text": msg_text}).encode('utf-8'))
             s.close()
         except Exception as e:
             with clock_lock:
-                log_and_notify("ERRO", f"Falha ao enviar para {target_id} ({str(e)})")
+                logs.append({"time": time.strftime("%H:%M:%S"), "clock": lamport_clock, "action": "ERRO", "detail": f"Falha ao enviar para {target_id}"})
+                notify_browsers()
 
     threading.Thread(target=send_task).start()
+    return {"status": "ok"}
 
-@app.route('/')
-def index():
-    destinations = [k for k in MOCK_PEERS.keys() if k != PROCESS_ID]
-    return render_template('index.html', pid=PROCESS_ID, clock=lamport_clock, logs=logs, destinations=destinations)
+import queue
+@app.route('/stream')
+def stream():
+    q = queue.Queue()
+    listeners.append(q)
+    def event_stream():
+        yield f"data: {json.dumps({'clock': lamport_clock, 'logs': logs})}\n\n"
+        while True:
+            data = q.get()
+            yield f"data: {data}\n\n"
+    return Response(event_stream(), mimetype="text/event-stream")
 
 if __name__ == '__main__':
     threading.Thread(target=tcp_server, daemon=True).start()
-    socketio.run(app, host='0.0.0.0', port=WEB_PORT, debug=False, allow_unsafe_werkzeug=True)
+    app.run(host='0.0.0.0', port=WEB_PORT, debug=False)
