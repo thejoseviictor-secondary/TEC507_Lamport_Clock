@@ -7,21 +7,21 @@ from flask import Flask, render_template, request, Response
 
 app = Flask(__name__)
 
-THIS_COMPUTER_HOST = os.environ.get("THIS_COMPUTER_HOST")
 PORT = int(os.environ.get("PORT"))
 PROCESS_ID = os.environ.get("PROCESS_ID")
 WEB_PORT = int(os.environ.get("WEB_PORT"))
 
-OTHER_COMPUTER_HOST = os.environ.get("OTHER_COMPUTER_HOST")
+COMPUTER_ONE_HOST = os.environ.get("COMPUTER_ONE_HOST")
+COMPUTER_TWO_HOST = os.environ.get("COMPUTER_TWO_HOST")
 
 MOCK_PEERS = {
-    "P1": {"ip": THIS_COMPUTER_HOST, "port": 5001},
-    "P2": {"ip": THIS_COMPUTER_HOST, "port": 5002},
-    "P3": {"ip": THIS_COMPUTER_HOST, "port": 5003},
+    "P1": {"ip": COMPUTER_ONE_HOST, "port": 5001},
+    "P2": {"ip": COMPUTER_ONE_HOST, "port": 5002},
+    "P3": {"ip": COMPUTER_ONE_HOST, "port": 5003},
     
-    "P4": {"ip": OTHER_COMPUTER_HOST, "port": 5004},
-    "P5": {"ip": OTHER_COMPUTER_HOST, "port": 5005},
-    "P6": {"ip": OTHER_COMPUTER_HOST, "port": 5006},
+    "P4": {"ip": COMPUTER_TWO_HOST, "port": 5004},
+    "P5": {"ip": COMPUTER_TWO_HOST, "port": 5005},
+    "P6": {"ip": COMPUTER_TWO_HOST, "port": 5006},
 }
 
 lamport_clock = 0
