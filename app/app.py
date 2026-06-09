@@ -10,19 +10,20 @@ from flask_socketio import SocketIO
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-PROCESS_ID = os.environ.get("PROCESS_ID", "P1")
-HOST = "0.0.0.0"
-PORT = int(os.environ.get("PORT", 5000))
-WEB_PORT = int(os.environ.get("WEB_PORT", 8080))
+OTHER_COMPUTER_HOST = os.environ.get("OTHER_COMPUTER_HOST")
+THIS_COMPUTER_HOST = "0.0.0.0"
+PROCESS_ID = os.environ.get("PROCESS_ID")
+PORT = int(os.environ.get("PORT"))
+WEB_PORT = int(os.environ.get("WEB_PORT"))
 
 MOCK_PEERS = {
-    "P1": {"ip": "192.168.1.50", "port": 5001},
-    "P2": {"ip": "192.168.1.50", "port": 5002},
-    "P3": {"ip": "192.168.1.50", "port": 5003},
+    "P1": {"ip": THIS_COMPUTER_HOST, "port": 5001},
+    "P2": {"ip": THIS_COMPUTER_HOST, "port": 5002},
+    "P3": {"ip": THIS_COMPUTER_HOST, "port": 5003},
     
-    "P4": {"ip": "192.168.1.60", "port": 5004},
-    "P5": {"ip": "192.168.1.60", "port": 5005},
-    "P6": {"ip": "192.168.1.60", "port": 5006},
+    "P4": {"ip": OTHER_COMPUTER_HOST, "port": 5004},
+    "P5": {"ip": OTHER_COMPUTER_HOST, "port": 5005},
+    "P6": {"ip": OTHER_COMPUTER_HOST, "port": 5006},
 }
 
 lamport_clock = 0
@@ -43,7 +44,7 @@ def log_and_notify(action, detail):
 def tcp_server():
     global lamport_clock
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
+    server.bind((THIS_COMPUTER_HOST, PORT))
     server.listen(5)
     print(f"[{PROCESS_ID}] Servidor TCP escutando na porta {PORT}...")
     
