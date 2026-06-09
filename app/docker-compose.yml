@@ -4,29 +4,38 @@ services:
   p1:
     build: .
     environment:
+      - OTHER_COMPUTER_HOST=0.0.0.0
       - PROCESS_ID=P1
       - PORT=5001
       - WEB_PORT=8081
     ports:
       - "5001:5001"
       - "8081:8081"
+    network_mode: host
+    restart: always
 
   p2:
     build: .
     environment:
+      - OTHER_COMPUTER_HOST=0.0.0.0
       - PROCESS_ID=P2
       - PORT=5002
       - WEB_PORT=8082
     ports:
       - "5002:5002"
       - "8082:8082"
+    network_mode: host
+    restart: always
 
   p3:
     build: .
     environment:
+      - OTHER_COMPUTER_HOST=0.0.0.0
       - PROCESS_ID=P3
       - PORT=5003
       - WEB_PORT=8083
     ports:
       - "5003:5003"
       - "8083:8083"
+    network_mode: host
+    restart: always
